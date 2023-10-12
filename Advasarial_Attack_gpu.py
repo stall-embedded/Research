@@ -51,12 +51,12 @@ def apply_attack_and_visualize(attack_class, fmodel, images, labels, model, atta
         heatmap_resized = F.interpolate(attacked_heatmap[NUM].unsqueeze(0).unsqueeze(0), size=(32, 32), mode='bilinear').squeeze().cpu().numpy()
         
         # 이미지 값이 유효한 범위 내에 있는지 확인
-        # img_to_display = images[NUM].permute(1, 2, 0).cpu().numpy()
-        # img_to_display = np.clip(img_to_display, 0, 1)
+        img_to_display = images[NUM].permute(1, 2, 0).cpu().numpy()
+        img_to_display = np.clip(img_to_display, 0, 1)
         adv_img_to_display = adversarials[NUM].permute(1, 2, 0).cpu().numpy()
         adv_img_to_display = np.clip(adv_img_to_display, 0, 1)
 
-        plt.imshow(adv_img_to_display)
+        plt.imshow(img_to_display)
         plt.imshow(heatmap_resized, cmap='hot', alpha=ALPHA)
         plt.title(f'{attack_name} (epsilon={epsilon})')
         plt.show()
@@ -104,7 +104,7 @@ def main():
     attack_classes = [
         (FGSM, 'FGSM'),
         (PGD, 'PGD'),
-        #(L2CarliniWagnerAttack, 'C&W'),
+        (L2CarliniWagnerAttack, 'C&W'),
         (LinfDeepFoolAttack, 'DeepFool')
     ]
 
