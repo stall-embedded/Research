@@ -92,35 +92,55 @@ def main():
     for img, label in zip(images, labels):
         if label.item() not in class_images:
             class_images[label.item()] = []
-        if len(class_images[label.item()]) < 3:
-            class_images[label.item()].append(img)
+        class_images[label.item()].append(img)
 
     os.makedirs("saved_images", exist_ok=True)
-
+    epsilons=[0.001, 0.01, 0.05, 0.1, 0.3, 0.5, 0.7, 1.0]
     for label, imgs in class_images.items():
-        for idx, img in enumerate(imgs):
-            img = img.unsqueeze(0).cuda()
-            img = torch.clamp(img, 0, 1)
-            heatmap = grad_cam(img.clone().detach().requires_grad_(True), label, model)
-            save_image_with_heatmap(img[0], heatmap, f"saved_images/original_class_{label}_img_{idx}.png")
+        print(f"Class:{label}")
+        imgs_tensor = torch.stack(imgs).cuda()
+        imgs_tensor = torch.clamp(imgs_tensor, 0, 1)
+        acc = accuracy(fmodel, imgs_tensor, torch.tensor([label], device='cuda').repeat(len(imgs)))
+        temp_df = pd.DataFrame({'Class': [label],
+                                'Image': ['N/A'],
+                                'Epsilon': ['N/A'], 
+                                'Attack': ['Original'], 
+                                'Euclidean Distance': ['N/A'], 
+                                'Cosine Similarity': ['N/A'], 
+                                'Accuracy': [acc]})
+        log_df = pd.concat([log_df, temp_df], ignore_index=True)
+        for attack_class, attack_name in attack_classes:
+            print(f"attack:{attack_name}")
+            for epsilon in epsilons:
+                print(f"epsilon:{epsilon}")
+                _, adversarials, _ = attack_class()(fmodel, imgs_tensor, torch.tensor([label], device='cuda').repeat(len(imgs_tensor)), epsilons=epsilon)
+                if isinstance(adversarials, list):
+                    adversarials = adversarials[0]
+                acc_adv = accuracy(fmodel, adversarials, labels[:len(adversarials)])
+                for idx, img in enumerate(imgs):
+                    if epsilon == epsilons[0]:
+                        img = img.unsqueeze(0).cuda()
+                        img = torch.clamp(img, 0, 1)
+                        heatmap = grad_cam(img.clone().detach().requires_grad_(True), label, model)
+                        save_image_with_heatmap(img[0], heatmap, f"saved_images/original_class_{label}_img_{idx}.png")
+                for idx, adv_img in enumerate(adversarials):
+                    if idx < 5:
+                        heatmap_adversarial = grad_cam(adv_img.unsqueeze(0).clone().detach().requires_grad_(True), label, model)
+                        save_image_with_heatmap(imgs[idx], heatmap_adversarial, f"saved_images/{attack_name}_class_{label}_img_{idx}_eps_{epsilon}.png")
+                        save_image_with_heatmap(adv_img, heatmap_adversarial, f"saved_images/adv_{attack_name}_class_{label}_img_{idx}_eps_{epsilon}.png")
+                        euclidean_distance, cosine_similarity = compute_difference(heatmap, heatmap_adversarial)
+                        print(f"Class {label}, Image {idx}, EPS {epsilon}, Attack {attack_name}: Euclidean Distance = {euclidean_distance}, Cosine Similarity = {cosine_similarity}")
 
-            acc = accuracy(fmodel, img, torch.tensor([label]).cuda())
-            log_df = log_df.append({'Class': label, 'Image': idx, 'Epsilon': 'N/A', 'Attack': 'Original', 'Euclidean Distance': 'N/A', 'Cosine Similarity': 'N/A', 'Accuracy': acc}, ignore_index=True)
-
-            epsilons=[0.001, 0.01, 0.05, 0.1, 0.3, 0.5, 0.7, 1.0]
-            for attack_class, attack_name in attack_classes:
-                for epsilon in epsilons:
-                    _, adversarials, _ = attack_class()(fmodel, img, torch.tensor([label]).cuda(), epsilons=epsilon)
-                    if isinstance(adversarials, list):
-                        adversarials = adversarials[0]
-                    print(f'Accuracy on adversarial examples ({attack_name}):', accuracy(fmodel, adversarials, labels))
-                    heatmap_adversarial = grad_cam(adversarials.clone().detach().requires_grad_(True), label, model)
-                    save_image_with_heatmap(adversarials[0], heatmap_adversarial, f"saved_images/{attack_name}_class_{label}_img_{idx}_eps_{epsilon}.png")
-                    euclidean_distance, cosine_similarity = compute_difference(heatmap, heatmap_adversarial)
-                    print(f"Class {label}, Image {idx}, EPS {epsilon}, Attack {attack_name}: Euclidean Distance = {euclidean_distance}, Cosine Similarity = {cosine_similarity}")
-                    log_df = log_df.append({'Class': label, 'Image': idx, 'Epsilon': epsilon, 'Attack': attack_name, 'Euclidean Distance': euclidean_distance, 'Cosine Similarity': cosine_similarity, 'Accuracy': acc}, ignore_index=True)
+                        temp_df = pd.DataFrame({'Class': [label],
+                                                'Image': [idx], 
+                                                'Epsilon': [epsilon], 
+                                                'Attack': [attack_name], 
+                                                'Euclidean Distance': [euclidean_distance], 
+                                                'Cosine Similarity': [cosine_similarity], 
+                                                'Accuracy': [acc_adv]})
+                        log_df = pd.concat([log_df, temp_df], ignore_index=True)
     
-    log_df.to_excel("attack_log_cnn.xlsx", index=False)
+    log_df.to_csv("attack_log_cnn.csv", index=False)
 
 if __name__ == '__main__':
     main()
