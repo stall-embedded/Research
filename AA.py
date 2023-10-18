@@ -28,11 +28,16 @@ def main():
     for epsilon in epsilons:
         print(f"Generating adversarial examples for epsilon: {epsilon}")
         attacker.generate_and_save("fgsm", images, labels, f"./adversarial_example/fgsm_adversarial_{epsilon}.pth", epsilon=epsilon)
-        attacker.generate_and_save("pgd", images, labels, f"./adversarial_example/pgd_adversarial_{epsilon}.pth", epsilon=epsilon, alpha=0.01, iters=100)
+        attacker.generate_and_save("pgd", images, labels, f"./adversarial_example/pgd_adversarial_{epsilon}.pth", epsilon=epsilon, alpha=0.01, iters=40)
         attacker.generate_and_save("boundary", images, labels, f"./adversarial_example/boundary_adversarial_{epsilon}.pth", epsilon=epsilon)
 
-    attacker.generate_and_save("c&w", images, labels, f"./adversarial_example/c&w_adversarial.pth")
     attacker.generate_and_save("deepfool", images, labels, f"./adversarial_example/deepfool_adversarial.pth")
+    attacker.generate_and_save("c&w", images, labels, f"./adversarial_example/c&w_adversarial.pth")
+
+    testloader = torch.utils.data.DataLoader(testset, batch_size=16, shuffle=False, num_workers=6)
+    images, labels = next(iter(testloader))
+    images = images.cuda()
+    labels = labels.cuda()
     attacker.generate_and_save("jsma", images, labels, f"./adversarial_example/jsma_adversarial.pth")
 
 if __name__ == '__main__':
